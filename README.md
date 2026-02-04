@@ -101,7 +101,7 @@ all application nodes using a round-robin strategy.
 
 ---
 
-### Round-Robin Test
+### Round-Robin Test With Dashboard
 The test below sends multiple HTTP requests to the load balancer and
 inspects which backend server handled each request.
 ```bash
@@ -114,20 +114,6 @@ The output should rotate between all application nodes.
 
 ---
 
-### HAProxy Monitoring Dashboard
-
-HAProxy provides a built-in statistics dashboard that shows backend
-health and traffic distribution in real time.
-
-This dashboard was used to confirm that:
-- Traffic is automatically redirected when a backend goes down
-- Unhealthy nodes are removed from rotation
-- Healthy nodes continue serving requests
-- Traffic is redistributed evenly across remaining nodes
-
-![HAProxy Stats Dashboard](screenshots/haproxy-stats-up.png)
-
----
 
 ## Database Layer (PostgreSQL)
 
