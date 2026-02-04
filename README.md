@@ -22,6 +22,11 @@ A small homelab project that mimics a simple AWS setup:
 - HTTP health checks and automatic failover (traffic is diverted away from unhealthy nodes)
 - Basic monitoring via HAProxy stats dashboard
 
+## Load Balancing Verification
+### Round-Robin Test
+![HAProxy Round Robin](screenshots/haproxy-round-robin.png)
+
+
 ## HAProxy config highlights
 - Backend health check: `GET /`
 - Response header injection for testing:
