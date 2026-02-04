@@ -1,84 +1,216 @@
-# Homelab AWS-Style Architecture (Proxmox)
+# Homelab AWS-Style Load Balancing Architecture
 
-A small homelab project that mimics a simple AWS setup:
-- **EC2**: 3 application nodes (Dockerised)
-- **ALB/ELB**: HAProxy (round-robin + health checks + stats)
-- **RDS**: PostgreSQL server
+This project simulates an **AWS-style application architecture** using a Proxmox-based homelab.
 
-## Architecture
-![diagram](architecture/diagram.png)
+The primary goal of this project is to **observe and understand how a load balancer behaves**
+when distributing traffic across multiple application nodes, including:
 
-## Nodes
-| Role | Hostname | IP | Notes |
-|---|---|---|---|
-| Load Balancer | lb-haproxy | <LB_IP> | HAProxy on port 80, stats on 8404 |
-| App 1 | app-1 | <APP1_IP> | Docker + `drun` wrapper |
-| App 2 | app-2 | <APP2_IP> | Docker + fuse-overlayfs + /dev/fuse |
-| App 3 | app-3 | <APP3_IP> | Docker + fuse-overlayfs + /dev/fuse |
-| Database | db-postgres | <DB_IP> | PostgreSQL on 5432 |
+- Round-robin traffic distribution
+- Health checks
+- Automatic failover
+- Traffic redistribution when a node goes down
 
-## What this demonstrates
-- Round-robin load balancing across 3 app nodes
-- HTTP health checks and automatic failover (traffic is diverted away from unhealthy nodes)
-- Basic monitoring via HAProxy stats dashboard
+During implementation, several infrastructure constraints were encountered while deploying
+Docker inside LXC containers. These challenges became an additional learning outcome and
+reflect how real systems often require engineers to adapt designs during deployment.
 
+This project was intentionally built on **limited hardware (4GB RAM, 64GB storage)** to
+mirror realistic resource constraints in small environments.
 
-## HAProxy config highlights
-- Backend health check: `GET /`
-- Response header injection for testing:
-  - `X-Backend: app1/app2/app3`
+---
 
-## How to test
-### 1) Confirm round-robin
-```bash
-for i in {1..12}; do curl -sI http://<LB_IP>/ | grep -i "^x-backend:"; done
+## Architecture Overview
+
+This homelab mirrors a simplified AWS-style layout:
+
+- **HAProxy**  
+  Acts as an Application Load Balancer (ALB)
+
+- **Application Nodes (app1, app2, app3)**  
+  Simulate EC2 instances running containerised web services
+
+- **PostgreSQL**  
+  Simulates an RDS-style backend database
+
+- **Proxmox LXC**  
+  Lightweight compute layer for all nodes
+
+The design focuses on **behaviour, observability, and resilience**, rather than cloud-specific tooling.
+
+---
+
+## Project Scope
+
+### Primary Objective
+- Understand and verify **load balancer behaviour**
+- Observe how traffic is distributed across healthy nodes
+- Confirm automatic failover when a backend becomes unavailable
+
+### Secondary Learning Outcomes
+- Running Docker inside LXC under resource and kernel constraints
+- Adapting container storage and security configurations
+- Understanding how infrastructure differences affect deployment, but not service behaviour
+
+---
+
+## Prerequisites
+
+- Proxmox VE with LXC support
+- Basic Linux administration knowledge
+- SSH access between nodes
+- Docker installed inside application containers
+- Git
+
+---
+
+## Application Nodes
+
+Each application node serves the **same purpose** and exposes a web service on port `3000`.
+
+| Node | Role | Port |
+|-----|-----|-----|
+| app1 | Application Server | 3000 |
+| app2 | Application Server | 3000 |
+| app3 | Application Server | 3000 |
+
+All application nodes are treated equally by the load balancer.
+
+---
+
+## Load Balancing with HAProxy
+
+HAProxy is configured to:
+
+- Use **round-robin** load balancing
+- Perform **HTTP health checks**
+- Automatically remove unhealthy nodes
+- Reintroduce nodes when they recover
+
+To make traffic flow observable, HAProxy injects a custom response header:
+
+```text
+X-Backend: app1
+X-Backend: app2
+X-Backend: app3
 ```
-## Load Balancing Verification
-### Round-Robin Test
-![HAProxy Round Robin](screenshots/haproxy-round-robin.png)
+This allows clear identification of which backend handled each request.
 
+
+## Load Balancing Verification
+This section verifies that HAProxy distributes traffic evenly across
+all application nodes using a round-robin strategy.
+
+---
+
+### Round-Robin Test
+The test below sends multiple HTTP requests to the load balancer and
+inspects which backend server handled each request.
+```bash
+for i in {1..12}; do
+  curl -sI http://localhost/ | grep -i "^x-backend:"
+done
+```
+The output should rotate between all application nodes.
+![HAProxy Round Robin Test](screenshots/haproxy-round-robin.png)
+
+---
+
+### HAProxy Monitoring Dashboard
+
+HAProxy provides a built-in statistics dashboard that shows backend
+health and traffic distribution in real time.
+
+This dashboard was used to confirm that:
+- Traffic is automatically redirected when a backend goes down
+- Unhealthy nodes are removed from rotation
+- Healthy nodes continue serving requests
+- Traffic is redistributed evenly across remaining nodes
+
+![HAProxy Stats Dashboard](screenshots/haproxy-stats-up.png)
+
+---
+
+## Database Layer (PostgreSQL)
+
+A PostgreSQL instance is used to simulate an RDS-style backend database.
+
+- Database access is restricted using `pg_hba.conf`
+- Only application nodes are allowed to connect
+- Network-level access control is enforced
+- Database deployment is decoupled from application containers
+
+This separation reflects real-world backend design principles.
+
+---
 
 ## Design Decisions & Constraints
+
 ### Why LXC (instead of full virtual machines)
-This project uses **Linux Containers (LXC)** on Proxmox instead of full virtual machines.
 
-The decision was made to:
-- Reduce CPU and memory overhead on limited homelab hardware
-- Allow faster provisioning and recovery of nodes
-- Leverage Proxmox’s native container support
-- Focus on **system behaviour and architecture**, rather than virtualisation performance
+LXC was chosen over full virtual machines to operate within limited
+homelab resources:
 
-LXC provides a lightweight and practical way to simulate **EC2-style application nodes** while preserving realistic operational constraints.
+- Lower CPU and memory overhead
+- Faster provisioning and recovery
+- Suitable for a 4GB RAM / 64GB storage environment
+
+LXC provides a lightweight yet practical way to simulate EC2-style
+instances in a constrained setup.
 
 ---
 
 ### Running Docker inside LXC
-Docker is intentionally run **inside privileged LXC containers**.
 
-This reflects real-world environments where containers are deployed under constraints such as:
-- Security frameworks (e.g. AppArmor)
-- Filesystem limitations
-- Kernel feature availability differences between nodes
+Docker is intentionally run inside **privileged LXC containers**.
 
-Running Docker in this setup exposes operational challenges that engineers are often required to diagnose and resolve in production systems.
+During deployment, several constraints were encountered, including:
+- AppArmor restrictions
+- Overlay filesystem limitations
+- Kernel feature availability differences
+
+These constraints required practical adjustments such as:
+- Security profile tuning
+- Alternative storage drivers (e.g. `fuse-overlayfs`)
+
+These challenges closely resemble real-world operational scenarios.
 
 ---
 
 ### Why application nodes are not identical
-Although all application nodes serve the **same workload** behind HAProxy, their internal Docker configurations are **not identical**.
+
+Although all application nodes serve the same workload, their internal
+Docker configurations are not identical:
 
 - `app1` runs Docker using the default overlay filesystem
-- `app2` and `app3` require `fuse-overlayfs` with `/dev/fuse` exposed due to environment constraints
+- `app2` and `app3` require `fuse-overlayfs` due to environment constraints
 
-This difference is **intentional**.
+This difference is intentional.
 
-In real production environments, infrastructure is rarely perfectly uniform.
-Nodes may differ due to kernel versions, security policies, or platform limitations.
+In real production environments, infrastructure is rarely uniform.
+Load balancers operate based on **health and availability**, not internal
+implementation details.
 
-This project demonstrates that:
-- Load balancers operate based on **health and availability**, not internal implementation
-- Services remain resilient as long as each node satisfies the required service contract
-- Operational tooling must adapt to infrastructure realities rather than assume uniformity
+HAProxy treats all nodes equally as long as service contracts are met.
 
-HAProxy treats all application nodes equally, relying solely on health checks and response behaviour.
+---
 
+## Lessons Learned
+
+- Load balancers distribute traffic based on health, not implementation
+- Infrastructure constraints are a normal part of real deployments
+- Observability is essential for understanding system behaviour
+- Reliable systems are designed to tolerate differences between nodes
+
+---
+
+## Summary
+
+This project demonstrates a practical, operations-focused approach to:
+
+- Load balancing and failover behaviour
+- Containerised applications under constraints
+- Health checks and traffic redistribution
+- Infrastructure decision-making on limited hardware
+
+The emphasis of this project is on **understanding how systems behave**,
+not on building a perfect or idealised environment.
