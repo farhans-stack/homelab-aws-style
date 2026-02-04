@@ -31,7 +31,7 @@ A small homelab project that mimics a simple AWS setup:
 ### 1) Confirm round-robin
 ```bash
 for i in {1..12}; do curl -sI http://<LB_IP>/ | grep -i "^x-backend:"; done
-
+```
 
 ## Design Decisions & Constraints
 ### Why LXC (instead of full virtual machines)
