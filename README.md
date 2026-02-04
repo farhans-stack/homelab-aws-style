@@ -56,7 +56,6 @@ The design focuses on **behaviour, observability, and resilience**, rather than 
 ## Prerequisites
 
 - Proxmox VE with LXC support
-- Basic Linux administration knowledge
 - SSH access between nodes
 - Docker installed inside application containers
 - Git
