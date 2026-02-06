@@ -54,7 +54,6 @@ The design focuses on **behaviour, observability, and resilience**, rather than 
 ---
 
 ## Prerequisites
-
 - Proxmox VE with LXC support
 - SSH access between nodes
 - Docker installed inside application containers
@@ -63,7 +62,6 @@ The design focuses on **behaviour, observability, and resilience**, rather than 
 ---
 
 ## Application Nodes
-
 Each application node serves the **same purpose** and exposes a web service on port `3000`.
 
 | Node | Role | Port |
@@ -77,7 +75,6 @@ All application nodes are treated equally by the load balancer.
 ---
 
 ## Load Balancing with HAProxy
-
 HAProxy is configured to:
 
 - Use **round-robin** load balancing
@@ -113,6 +110,30 @@ The output should rotate between all application nodes.
 ![HAProxy Round Robin Test](screenshots/haproxy-round-robin.png)
 
 ---
+
+## Network Isolation & Firewall Enforcement
+To better simulate a real-world architecture, **direct access to backend
+application nodes is restricted**.
+
+Only the load balancer is allowed to communicate with application services.
+
+### Access Model
+- Application services listen on port `3000`
+- Only HAProxy can reach backend nodes
+- Direct access from the Proxmox host or other nodes is blocked
+- Backend nodes behave like instances in a **private subnet**
+
+### Docker-Aware Firewall Rules
+Because Docker-published ports can bypass traditional host firewalls,
+access control is enforced using the `DOCKER-USER` chain.
+
+The following rule pattern is applied on each application node:
+
+# Allow traffic from HAProxy only
+iptables -I DOCKER-USER 1 -p tcp -s <LB_IP> --dport 3000 -j ACCEPT
+
+# Drop all other access to the application port
+iptables -I DOCKER-USER 2 -p tcp --dport 3000 -j DROP
 
 
 ## Database Layer (PostgreSQL)
