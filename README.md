@@ -130,10 +130,13 @@ access control is enforced using the `DOCKER-USER` chain.
 The following rule pattern is applied on each application node:
 
 # Allow traffic from HAProxy only
+```bash
 iptables -I DOCKER-USER 1 -p tcp -s <LB_IP> --dport 3000 -j ACCEPT
-
+```
 # Drop all other access to the application port
+```bash
 iptables -I DOCKER-USER 2 -p tcp --dport 3000 -j DROP
+```
 
 
 ## Database Layer (PostgreSQL)
