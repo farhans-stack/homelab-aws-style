@@ -101,7 +101,7 @@ all application nodes using a round-robin strategy.
 
 ---
 
-```md
+
 ### Round-Robin Test With Dashboard
 
 The test below sends multiple HTTP requests to the load balancer and inspects which backend server handled each request.
@@ -114,32 +114,35 @@ done
 The output should rotate between all application nodes.
 ![HAProxy Round Robin Test](screenshots/haproxy-round-robin.png)
 
----
-
-```md
----
+----
 
 ## Network Isolation & Firewall Enforcement
+To better simulate a real-world architecture, **direct access to backend
+application nodes is restricted**.
 
-Backend application nodes are treated as **private instances**: they are not directly accessible from the host or other machines.
+Only the load balancer is allowed to communicate with application services.
 
-Only the HAProxy node is allowed to reach the application service port (`3000`).
+### Access Model
+- Application services listen on port `3000`
+- Only HAProxy can reach backend nodes
+- Direct access from the Proxmox host or other nodes is blocked
+- Backend nodes behave like instances in a **private subnet**
 
 ### Docker-Aware Firewall Rules
+Because Docker-published ports can bypass traditional host firewalls,
+access control is enforced using the `DOCKER-USER` chain.
 
-Docker-published ports can bypass traditional host firewalls, so access control is enforced via the `DOCKER-USER` chain.
+The following rule pattern is applied on each application node:
 
 ```bash
-# Allow HAProxy only (match original destination port)
+# Allow traffic from HAProxy only (match original destination port)
 iptables -I DOCKER-USER 1 -p tcp -m conntrack --ctstate NEW --ctorigdstport 3000 -s <LB_IP> -j ACCEPT
 
-# Drop all other access to port 3000
+# Drop all other access
 iptables -I DOCKER-USER 2 -p tcp -m conntrack --ctstate NEW --ctorigdstport 3000 -j DROP
 
 ```
 
-```md
----
 
 ## Database Layer (PostgreSQL)
 
@@ -152,7 +155,7 @@ A PostgreSQL instance is used to simulate an RDS-style backend database.
 
 This separation reflects real-world backend design principles.
 
----
+----
 
 ## Design Decisions & Constraints
 
@@ -168,7 +171,7 @@ homelab resources:
 LXC provides a lightweight yet practical way to simulate EC2-style
 instances in a constrained setup.
 
----
+----
 
 ### Running Docker inside LXC
 
@@ -185,7 +188,7 @@ These constraints required practical adjustments such as:
 
 These challenges closely resemble real-world operational scenarios.
 
----
+----
 
 ### Why application nodes are not identical
 
@@ -203,7 +206,7 @@ implementation details.
 
 HAProxy treats all nodes equally as long as service contracts are met.
 
----
+----
 
 ## Lessons Learned
 
@@ -212,7 +215,7 @@ HAProxy treats all nodes equally as long as service contracts are met.
 - Observability is essential for understanding system behaviour
 - Reliable systems are designed to tolerate differences between nodes
 
----
+----
 
 ## Summary
 
