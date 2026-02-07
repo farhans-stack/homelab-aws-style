@@ -65,7 +65,7 @@ The design focuses on **behaviour, observability, and resilience**, rather than 
 Each application node serves the **same purpose** and exposes a web service on port `3000`.
 
 | Node | Role | Port |
-|-----|-----|-----|
+|------|------|------|
 | app1 | Application Server | 3000 |
 | app2 | Application Server | 3000 |
 | app3 | Application Server | 3000 |
@@ -129,15 +129,17 @@ access control is enforced using the `DOCKER-USER` chain.
 
 The following rule pattern is applied on each application node:
 
-# Allow traffic from HAProxy only
 ```bash
-iptables -I DOCKER-USER 1 -p tcp -s <LB_IP> --dport 3000 -j ACCEPT
-```
-# Drop all other access to the application port
-```bash
-iptables -I DOCKER-USER 2 -p tcp --dport 3000 -j DROP
+# Allow traffic from HAProxy only (match original destination port)
+iptables -I DOCKER-USER 1 -p tcp -m conntrack --ctstate NEW --ctorigdstport 3000 -s <LB_IP> -j ACCEPT
+
+# Drop all other access
+iptables -I DOCKER-USER 2 -p tcp -m conntrack --ctstate NEW --ctorigdstport 3000 -j DROP
+
 ```
 
+```md
+---
 
 ## Database Layer (PostgreSQL)
 
