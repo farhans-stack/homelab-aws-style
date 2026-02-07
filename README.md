@@ -62,7 +62,8 @@ The design focuses on **behaviour, observability, and resilience**, rather than 
 ---
 
 ## Application Nodes
-Each application node serves the **same purpose** and exposes a web service on port `3000`.
+
+Each application node serves the same purpose and exposes a web service on port `3000`.
 
 | Node | Role | Port |
 |------|------|------|
@@ -71,6 +72,7 @@ Each application node serves the **same purpose** and exposes a web service on p
 | app3 | Application Server | 3000 |
 
 All application nodes are treated equally by the load balancer.
+
 
 ---
 
@@ -82,12 +84,13 @@ HAProxy is configured to:
 - Automatically remove unhealthy nodes
 - Reintroduce nodes when they recover
 
-To make traffic flow observable, HAProxy injects a custom response header:
+TTo make traffic flow observable, HAProxy injects a custom response header:
 
 ```text
 X-Backend: app1
 X-Backend: app2
 X-Backend: app3
+
 ```
 This allows clear identification of which backend handled each request.
 
@@ -98,9 +101,11 @@ all application nodes using a round-robin strategy.
 
 ---
 
+```md
 ### Round-Robin Test With Dashboard
-The test below sends multiple HTTP requests to the load balancer and
-inspects which backend server handled each request.
+
+The test below sends multiple HTTP requests to the load balancer and inspects which backend server handled each request.
+
 ```bash
 for i in {1..12}; do
   curl -sI http://localhost/ | grep -i "^x-backend:"
@@ -111,29 +116,24 @@ The output should rotate between all application nodes.
 
 ---
 
+```md
+---
+
 ## Network Isolation & Firewall Enforcement
-To better simulate a real-world architecture, **direct access to backend
-application nodes is restricted**.
 
-Only the load balancer is allowed to communicate with application services.
+Backend application nodes are treated as **private instances**: they are not directly accessible from the host or other machines.
 
-### Access Model
-- Application services listen on port `3000`
-- Only HAProxy can reach backend nodes
-- Direct access from the Proxmox host or other nodes is blocked
-- Backend nodes behave like instances in a **private subnet**
+Only the HAProxy node is allowed to reach the application service port (`3000`).
 
 ### Docker-Aware Firewall Rules
-Because Docker-published ports can bypass traditional host firewalls,
-access control is enforced using the `DOCKER-USER` chain.
 
-The following rule pattern is applied on each application node:
+Docker-published ports can bypass traditional host firewalls, so access control is enforced via the `DOCKER-USER` chain.
 
 ```bash
-# Allow traffic from HAProxy only (match original destination port)
+# Allow HAProxy only (match original destination port)
 iptables -I DOCKER-USER 1 -p tcp -m conntrack --ctstate NEW --ctorigdstport 3000 -s <LB_IP> -j ACCEPT
 
-# Drop all other access
+# Drop all other access to port 3000
 iptables -I DOCKER-USER 2 -p tcp -m conntrack --ctstate NEW --ctorigdstport 3000 -j DROP
 
 ```
