@@ -101,39 +101,38 @@ all application nodes using a round-robin strategy.
 
 ---
 
-
-### Round-Robin Test With Dashboard
-
-The test below sends multiple HTTP requests to the load balancer and inspects which backend server handled each request.
+### Round-Robin Test
 
 ```bash
 for i in {1..12}; do
   curl -sI http://localhost/ | grep -i "^x-backend:"
 done
 ```
-The output should rotate between all application nodes.
+---
+
+## Expected behaviour:
+- Requst rotate across app1, app2, app3
+- When a backend is stopped, traffic is redistributed automatically
+- When the backend recovers, it is reintroduced without manual intervention
+
+
+HAProxy Round Robin Test
 ![HAProxy Round Robin Test](screenshots/haproxy-round-robin.png)
 
 ----
 
 ## Network Isolation & Firewall Enforcement
-To better simulate a real-world architecture, **direct access to backend
-application nodes is restricted**.
+Backend application nodes are treated as private instances and are not
+directly accessible from the host or other machines.
 
-Only the load balancer is allowed to communicate with application services.
+Only the HAProxy node is allowed to reach the application service port (3000).
 
-### Access Model
-- Application services listen on port `3000`
-- Only HAProxy can reach backend nodes
-- Direct access from the Proxmox host or other nodes is blocked
-- Backend nodes behave like instances in a **private subnet**
 
 ### Docker-Aware Firewall Rules
-Because Docker-published ports can bypass traditional host firewalls,
-access control is enforced using the `DOCKER-USER` chain.
+Docker-published ports can bypass traditional host firewalls. To enforce proper
+network isolation, access control is applied using the DOCKER-USER chain.
 
-The following rule pattern is applied on each application node:
-
+On each application node:
 ```bash
 # Allow traffic from HAProxy only (match original destination port)
 iptables -I DOCKER-USER 1 -p tcp -m conntrack --ctstate NEW --ctorigdstport 3000 -s <LB_IP> -j ACCEPT
@@ -142,7 +141,9 @@ iptables -I DOCKER-USER 1 -p tcp -m conntrack --ctstate NEW --ctorigdstport 3000
 iptables -I DOCKER-USER 2 -p tcp -m conntrack --ctstate NEW --ctorigdstport 3000 -j DROP
 
 ```
+This ensures backend services behave like instances in a private subnet
 
+----
 
 ## Database Layer (PostgreSQL)
 
@@ -175,15 +176,15 @@ instances in a constrained setup.
 
 ### Running Docker inside LXC
 
-Docker is intentionally run inside **privileged LXC containers**.
+Docker run inside **privileged LXC containers**.
 
-During deployment, several constraints were encountered, including:
+Challenges encountered:
 - AppArmor restrictions
 - Overlay filesystem limitations
 - Kernel feature availability differences
 
-These constraints required practical adjustments such as:
-- Security profile tuning
+Mitigations included:
+- Security profile adjustments
 - Alternative storage drivers (e.g. `fuse-overlayfs`)
 
 These challenges closely resemble real-world operational scenarios.
@@ -198,22 +199,21 @@ Docker configurations are not identical:
 - `app1` runs Docker using the default overlay filesystem
 - `app2` and `app3` require `fuse-overlayfs` due to environment constraints
 
-This difference is intentional.
+This is intentional.
 
 In real production environments, infrastructure is rarely uniform.
 Load balancers operate based on **health and availability**, not internal
 implementation details.
 
-HAProxy treats all nodes equally as long as service contracts are met.
 
 ----
 
 ## Lessons Learned
 
 - Load balancers distribute traffic based on health, not implementation
-- Infrastructure constraints are a normal part of real deployments
+- Infrastructure constraints are  normal in real deployments
 - Observability is essential for understanding system behaviour
-- Reliable systems are designed to tolerate differences between nodes
+- Reliable systems tolerate diffrerences between backend nodes
 
 ----
 
