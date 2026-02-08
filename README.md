@@ -53,13 +53,6 @@ The design focuses on **behaviour, observability, and resilience**, rather than 
 
 ---
 
-## Prerequisites
-- Proxmox VE with LXC support
-- SSH access between nodes
-- Docker installed inside application containers
-- Git
-
----
 
 ## Application Nodes
 
@@ -84,7 +77,7 @@ HAProxy is configured to:
 - Automatically remove unhealthy nodes
 - Reintroduce nodes when they recover
 
-TTo make traffic flow observable, HAProxy injects a custom response header:
+To make traffic flow observable, HAProxy injects a custom response header:
 
 ```text
 X-Backend: app1
@@ -111,7 +104,7 @@ done
 ---
 
 ## Expected behaviour:
-- Requst rotate across app1, app2, app3
+- Request rotate across app1, app2, app3
 - When a backend is stopped, traffic is redistributed automatically
 - When the backend recovers, it is reintroduced without manual intervention
 
@@ -157,6 +150,19 @@ A PostgreSQL instance is used to simulate an RDS-style backend database.
 This separation reflects real-world backend design principles.
 
 ----
+
+## Automation with Ansible
+
+The environment is automated using Ansible with role-based playbooks:
+- app - Docker setup, container deployment, firewall rules
+- haproxy - HAProxy installation and configuration
+- db - PostgreSQL installation and access control
+
+Ansible playbooks are designed to be repeateble and idompotent, allowing the entire environment to be rebuilt consistently.
+
+
+----
+
 
 ## Design Decisions & Constraints
 
