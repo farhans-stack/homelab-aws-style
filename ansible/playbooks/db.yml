@@ -1,0 +1,7 @@
+- name: Configure PostgreSQL database node
+  hosts: db
+  become: true
+
+  roles:
+    - common
+    - postgres

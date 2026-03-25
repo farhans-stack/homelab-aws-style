@@ -1,0 +1,54 @@
+- name: Install Docker packages (Ubuntu)
+  apt:
+    name:
+      - docker.io
+    state: present
+
+- name: Ensure Docker is running
+  systemd:
+    name: docker
+    enabled: true
+    state: started
+
+# Optional: app2/app3 sometimes need fuse-overlayfs in LXC
+- name: Install fuse-overlayfs (safe even if not needed)
+  apt:
+    name: fuse-overlayfs
+    state: present
+
+- name: Ensure /etc/docker exists
+  file:
+    path: /etc/docker
+    state: directory
+    mode: "0755"
+
+- name: Configure Docker daemon to use fuse-overlayfs (LXC-friendly)
+  copy:
+    dest: /etc/docker/daemon.json
+    content: |
+      {
+        "storage-driver": "fuse-overlayfs"
+      }
+  notify: Restart Docker
+
+- name: Pull demo app image
+  community.docker.docker_image:
+    name: "{{ app_image }}"
+    source: pull
+
+- name: Run demo app container
+  community.docker.docker_container:
+    name: "{{ app_container_name | default('demo-app') }}"
+    image: "{{ app_image }}"
+    state: started
+    restart_policy: always
+    published_ports:
+      - "{{ app_port }}:80"
+    restart: yes
+    # security options (works even if not strictly needed)
+    security_opts:
+      - "apparmor=unconfined"
+  register: demo_container
+  retries: 2
+  delay: 2
+  until: demo_container is succeeded

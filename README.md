@@ -1,236 +1,144 @@
-# Homelab AWS-Style Load Balancing Architecture
+# 🧪 AWS Homestyle Lab (Proxmox LXC)
 
-This project simulates an **AWS-style application architecture** using a Proxmox-based homelab.
+A lightweight homelab simulating AWS-style infrastructure using Proxmox LXC containers.
 
-The primary goal of this project is to **observe and understand how a load balancer behaves**
-when distributing traffic across multiple application nodes, including:
-
-- Round-robin traffic distribution
-- Health checks
-- Automatic failover
-- Traffic redistribution when a node goes down
-
-During implementation, several infrastructure constraints were encountered while deploying
-Docker inside LXC containers. These challenges became an additional learning outcome and
-reflect how real systems often require engineers to adapt designs during deployment.
-
-This project was intentionally built on **limited hardware (4GB RAM, 64GB storage)** to
-mirror realistic resource constraints in small environments.
+Built for learning, testing, breaking, and rebuilding — without burning cloud credits.
 
 ---
 
-## Architecture Overview
+## 🎯 Objective
 
-This homelab mirrors a simplified AWS-style layout:
+To replicate a simplified cloud architecture locally:
 
-- **HAProxy**  
-  Acts as an Application Load Balancer (ALB)
-
-- **Application Nodes (app1, app2, app3)**  
-  Simulate EC2 instances running containerised web services
-
-- **PostgreSQL**  
-  Simulates an RDS-style backend database
-
-- **Proxmox LXC**  
-  Lightweight compute layer for all nodes
-
-The design focuses on **behaviour, observability, and resilience**, rather than cloud-specific tooling.
+* App servers → EC2
+* HAProxy → Load Balancer (ELB)
+* PostgreSQL → RDS
+* Ansible → Configuration management
 
 ---
 
-## Project Scope
+## 🏗️ Architecture
 
-### Primary Objective
-- Understand and verify **load balancer behaviour**
-- Observe how traffic is distributed across healthy nodes
-- Confirm automatic failover when a backend becomes unavailable
+Client (Laptop)
+↓
+HAProxy (lb-haproxy:80)
+↓
+-
 
-### Secondary Learning Outcomes
-- Running Docker inside LXC under resource and kernel constraints
-- Adapting container storage and security configurations
-- Understanding how infrastructure differences affect deployment, but not service behaviour
-
----
-
-
-## Application Nodes
-
-Each application node serves the same purpose and exposes a web service on port `3000`.
-
-| Node | Role | Port |
-|------|------|------|
-| app1 | Application Server | 3000 |
-| app2 | Application Server | 3000 |
-| app3 | Application Server | 3000 |
-
-All application nodes are treated equally by the load balancer.
-
+|    |         |        |
+app1  app2      app3   (round robin)
+↓
+PostgreSQL (db-postgres:5432)
 
 ---
 
-## Load Balancing with HAProxy
-HAProxy is configured to:
+## 🖥️ Nodes
 
-- Use **round-robin** load balancing
-- Perform **HTTP health checks**
-- Automatically remove unhealthy nodes
-- Reintroduce nodes when they recover
+| Node        | Role                | IP Address  | Port |
+| ----------- | ------------------- | ----------- | ---- |
+| lb-haproxy  | Load Balancer       | 192.168.x.x | 80   |
+| app1        | App Server          | 192.168.x.x | 3000 |
+| app2        | App Server          | 192.168.x.x | 3000 |
+| app3        | App Server          | 192.168.x.x | 3000 |
+| db-postgres | Database (Postgres) | 192.168.x.x | 5432 |
 
-To make traffic flow observable, HAProxy injects a custom response header:
+---
+
+## ⚙️ Tech Stack
+
+* Proxmox (LXC containers)
+* HAProxy (Load balancing)
+* Nginx / App service (port 3000)
+* PostgreSQL
+* Ansible (automation & roles)
+
+---
+
+## 🔁 Load Balancing
+
+Round-robin verified:
 
 ```text
-X-Backend: app1
-X-Backend: app2
-X-Backend: app3
-
+app1 → app2 → app3 → app1 → app2 → app3
 ```
-This allows clear identification of which backend handled each request.
 
-
-## Load Balancing Verification
-This section verifies that HAProxy distributes traffic evenly across
-all application nodes using a round-robin strategy.
+HAProxy routes traffic correctly across all backend nodes.
 
 ---
 
-### Round-Robin Test
+## 🔍 Health Check
+
+Run:
 
 ```bash
-for i in {1..12}; do
-  curl -sI http://localhost/ | grep -i "^x-backend:"
-done
+./scripts/check_lab.sh
 ```
+
+Checks:
+
+* Host reachability (ping)
+* SSH access
+* Load balancer rotation
+* Database port availability
+* Optional direct app access
+
 ---
 
-## Expected behaviour:
-- Request rotate across app1, app2, app3
-- When a backend is stopped, traffic is redistributed automatically
-- When the backend recovers, it is reintroduced without manual intervention
+## 🧠 Notes
 
+* Static IP configured via Proxmox (not inside container)
+* SSH access uses `root`
+* Backend app ports (3000) are intended for internal access via LB
+* Lab is designed for **deploy → test → destroy → repeat**
 
-HAProxy Round Robin Test
-![HAProxy Round Robin Test](screenshots/haproxy-round-robin.png)
+---
 
-----
+## 📦 Backups
 
-## Network Isolation & Firewall Enforcement
-Backend application nodes are treated as private instances and are not
-directly accessible from the host or other machines.
+Configs stored locally under:
 
-Only the HAProxy node is allowed to reach the application service port (3000).
-
-
-### Docker-Aware Firewall Rules
-Docker-published ports can bypass traditional host firewalls. To enforce proper
-network isolation, access control is applied using the DOCKER-USER chain.
-
-On each application node:
 ```bash
-# Allow traffic from HAProxy only (match original destination port)
-iptables -I DOCKER-USER 1 -p tcp -m conntrack --ctstate NEW --ctorigdstport 3000 -s <LB_IP> -j ACCEPT
-
-# Drop all other access
-iptables -I DOCKER-USER 2 -p tcp -m conntrack --ctstate NEW --ctorigdstport 3000 -j DROP
-
+/backups
 ```
-This ensures backend services behave like instances in a private subnet
 
-----
+Includes:
 
-## Database Layer (PostgreSQL)
+* HAProxy config
+* SSH configs
+* PostgreSQL configs
 
-A PostgreSQL instance is used to simulate an RDS-style backend database.
+---
 
-- Database access is restricted using `pg_hba.conf`
-- Only application nodes are allowed to connect
-- Network-level access control is enforced
-- Database deployment is decoupled from application containers
+## 📸 Proof
 
-This separation reflects real-world backend design principles.
+See `/screenshots` for:
 
-----
+* HAProxy round robin test
+* Lab validation outputs
 
-## Automation with Ansible
+---
 
-The environment is automated using Ansible with role-based playbooks:
-- app - Docker setup, container deployment, firewall rules
-- haproxy - HAProxy installation and configuration
-- db - PostgreSQL installation and access control
+## 🚀 Next Steps
 
-Ansible playbooks are designed to be repeateble and idompotent, allowing the entire environment to be rebuilt consistently.
+* Improve automation via Ansible
+* Add monitoring (Prometheus / Grafana or Netdata)
+* Simulate deployment workflows
+* Add failure testing (kill node, observe behaviour)
 
+---
 
-----
+## 💭 Reflection
 
+This homelab started as a simple setup,
+but quickly turned into a full learning playground.
 
-## Design Decisions & Constraints
+> “Just one more check…” → 4 hours later.
 
-### Why LXC (instead of full virtual machines)
+---
 
-LXC was chosen over full virtual machines to operate within limited
-homelab resources:
+## 🧠 Author
 
-- Lower CPU and memory overhead
-- Faster provisioning and recovery
-- Suitable for a 4GB RAM / 64GB storage environment
+Built by someone who:
 
-LXC provides a lightweight yet practical way to simulate EC2-style
-instances in a constrained setup.
-
-----
-
-### Running Docker inside LXC
-
-Docker run inside **privileged LXC containers**.
-
-Challenges encountered:
-- AppArmor restrictions
-- Overlay filesystem limitations
-- Kernel feature availability differences
-
-Mitigations included:
-- Security profile adjustments
-- Alternative storage drivers (e.g. `fuse-overlayfs`)
-
-These challenges closely resemble real-world operational scenarios.
-
-----
-
-### Why application nodes are not identical
-
-Although all application nodes serve the same workload, their internal
-Docker configurations are not identical:
-
-- `app1` runs Docker using the default overlay filesystem
-- `app2` and `app3` require `fuse-overlayfs` due to environment constraints
-
-This is intentional.
-
-In real production environments, infrastructure is rarely uniform.
-Load balancers operate based on **health and availability**, not internal
-implementation details.
-
-
-----
-
-## Lessons Learned
-
-- Load balancers distribute traffic based on health, not implementation
-- Infrastructure constraints are  normal in real deployments
-- Observability is essential for understanding system behaviour
-- Reliable systems tolerate diffrerences between backend nodes
-
-----
-
-## Summary
-
-This project demonstrates a practical, operations-focused approach to:
-
-- Load balancing and failover behaviour
-- Containerised applications under constraints
-- Health checks and traffic redistribution
-- Infrastructure decision-making on limited hardware
-
-The emphasis of this project is on **understanding how systems behave**,
-not on building a perfect or idealised environment.
+* opens the lab “just for a while”
+* and somehow ends up debugging infrastructure at 3AM

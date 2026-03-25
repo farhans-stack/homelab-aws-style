@@ -1,0 +1,47 @@
+- name: Install iptables-persistent
+  apt:
+    name: iptables-persistent
+    state: present
+
+# Ensure DOCKER-USER chain exists (Docker creates it, but safe to run)
+- name: Ensure DOCKER-USER chain exists
+  command: iptables -N DOCKER-USER
+  register: docker_user_chain
+  failed_when: false
+  changed_when: docker_user_chain.rc == 0
+
+# Insert allow rule for LB (match original destination port due to Docker DNAT)
+- name: Allow LB to access published app port (ctorigdstport)
+  command: >
+    iptables -C DOCKER-USER -p tcp -m conntrack --ctstate NEW --ctorigdstport {{ app_port }}
+    -s {{ lb_ip }} -j ACCEPT
+  register: allow_rule_check
+  failed_when: false
+  changed_when: false
+
+- name: Insert allow rule for LB (if missing)
+  command: >
+    iptables -I DOCKER-USER 1 -p tcp -m conntrack --ctstate NEW --ctorigdstport {{ app_port }}
+    -s {{ lb_ip }} -j ACCEPT
+  when: allow_rule_check.rc != 0
+
+# Insert drop rule for everyone else
+- name: Drop all other access to published app port (ctorigdstport) if missing
+  command: >
+    iptables -C DOCKER-USER -p tcp -m conntrack --ctstate NEW --ctorigdstport {{ app_port }}
+    -j DROP
+  register: drop_rule_check
+  failed_when: false
+  changed_when: false
+
+- name: Insert drop rule (if missing)
+  command: >
+    iptables -I DOCKER-USER 2 -p tcp -m conntrack --ctstate NEW --ctorigdstport {{ app_port }}
+    -j DROP
+  when: drop_rule_check.rc != 0
+
+- name: Save iptables rules
+  command: netfilter-persistent save
+
+- name: Reload iptables rules
+  command: netfilter-persistent reload

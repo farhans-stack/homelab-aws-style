@@ -1,0 +1,8 @@
+- name: Configure application nodes (Docker + app container + firewall)
+  hosts: apps
+  become: true
+
+  roles:
+    - common
+    - app
+    - firewall

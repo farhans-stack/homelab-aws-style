@@ -1,0 +1,16 @@
+# Ansible
+*.retry
+
+# System
+.DS_Store
+
+# Temp files
+*.tmp
+*.log
+
+# SSH keys (just in case)
+*.pem
+*.key
+
+# Backup sensitive configs (optional)
+ backups/
