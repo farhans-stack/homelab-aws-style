@@ -3,11 +3,11 @@
 set -u
 
 declare -A HOSTS=(
-  [lb-haproxy]=192.168.100.18
-  [app1]=192.168.100.26
-  [app2]=192.168.100.24
-  [app3]=192.168.100.25
-  [db-postgres]=192.168.100.27
+  [lb-haproxy]=192.168.xx.xx
+  [app1]=192.168.xx.xx
+  [app2]=192.168.xx.xx
+  [app3]=192.168.xx.xx
+  [db-postgres]=192.168.xx.xx
 )
 
 echo "=== HOMELAB HEALTH CHECK ==="
