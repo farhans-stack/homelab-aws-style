@@ -6,7 +6,7 @@ app_image: "nginxdemos/hello:latest"
 app_container_name: "demo-app"
 
 # Only HAProxy is allowed to access app_port on app nodes
-lb_ip: "192.168.100.18"
+lb_ip: "192.168.xx.xx"
 
 # PostgreSQL demo vars (optional)
 pg_db: "testdb"
@@ -14,4 +14,4 @@ pg_user: "testuser"
 pg_pass: "testpass"
 
 # App nodes allowed to connect to Postgres
-app_subnet_cidr: "192.168.100.0/24"
+app_subnet_cidr: "192.168.xx.xx/24"
